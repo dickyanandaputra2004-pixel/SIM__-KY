@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>SIM Dicky - Campus App</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+
+<style>
+body { margin:0; font-family:'Segoe UI', sans-serif; }
+
+/* HEADER */
+#header{
+position:absolute;
+top:0;
+left:0;
+right:0;
+height:60px;
+background:#1e2a38;
+color:white;
+display:flex;
+align-items:center;
+padding:0 20px;
+font-weight:bold;
+z-index:1000;
+}
+
+/* SIDEBAR */
+#sidebar{
+position:absolute;
+top:60px;
+left:0;
+bottom:0;
+width:260px;
+background:#ffffff;
+box-shadow:2px 0 10px rgba(0,0,0,0.1);
+z-index:999;
+padding:15px;
+overflow:auto;
+}
+
+.menu{
+padding:10px;
+border-radius:10px;
+margin-bottom:10px;
+cursor:pointer;
+background:#f4f6f8;
+}
+
+.menu:hover{
+background:#dfe6e9;
+}
+
+/* MAP */
+#map{
+position:absolute;
+top:60px;
+left:260px;
+right:0;
+bottom:0;
+}
+
+/* INFO PANEL */
+#info{
+position:absolute;
+bottom:20px;
+right:20px;
+background:white;
+padding:15px;
+border-radius:12px;
+box-shadow:0 5px 15px rgba(0,0,0,0.2);
+z-index:1000;
+min-width:200px;
+}
+
+</style>
+</head>
+<body>
+
+<div id="header">🌐 SIM Dicky - Smart Campus INSTIPER</div>
+
+<div id="sidebar">
+<div class="menu">🏫 Semua Gedung</div>
+<div class="menu">🧪 Laboratorium</div>
+<div class="menu">📚 Perpustakaan</div>
+<div class="menu">🚗 Parkiran</div>
+<div class="menu">🌳 Area Umum</div>
+</div>
+
+<div id="map"></div>
+
+<div id="info">
+<b>Info Kampus</b><br>
+Klik gedung untuk lihat detail
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<script>
+
+// INIT MAP
+var map = L.map('map').setView([-7.7619,110.4096],18);
+
+// BASEMAP
+var satelit = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+subdomains:['mt0','mt1','mt2','mt3']
+}).addTo(map);
+
+var normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+
+// LAYER CONTROL
+L.control.layers({"Satelit":satelit,"Map":normal}).addTo(map);
+
+// SEARCH
+L.Control.geocoder().addTo(map);
+
+// WARNA
+function getColor(nama){
+if(nama.includes("Rektorat")) return "#e74c3c";
+if(nama.includes("Lab")) return "#9b59b6";
+if(nama.includes("Kuliah")) return "#3498db";
+return "#2ecc71";
+}
+
+// LUAS
+function luas(c){
+let a=0;
+for(let i=0;i<c.length;i++){
+let j=(i+1)%c.length;
+a+=c[i][1]*c[j][0];
+a-=c[j][1]*c[i][0];
+}
+return Math.abs(a*12365).toFixed(0);
+}
+
+// DATA GEDUNG
+var daftarGedung = [
+"Gedung Rektorat",
+"Auditorium INSTIPER",
+"Perpustakaan",
+"Laboratorium Pusat",
+"Lab Kultur Jaringan",
+"Gedung Kuliah A",
+"Gedung Kuliah B"
+];
+
+// QUERY
+var query=`
+[out:json][timeout:25];
+(
+way["building"](poly:"-7.7626 110.4089 -7.7626 110.4103 -7.7609 110.4103 -7.7609 110.4089");
+);
+out body;
+>;
+out skel qt;
+`;
+
+fetch("https://overpass-api.de/api/interpreter",{
+method:"POST",
+body:query
+})
+.then(r=>r.json())
+.then(d=>{
+
+let nodes={};
+let buildings=[];
+
+d.elements.forEach(e=>{
+if(e.type==="node"){
+nodes[e.id]=[e.lat,e.lon];
+}
+});
+
+d.elements.forEach(e=>{
+if(e.type==="way"){
+let coords=e.nodes.map(n=>nodes[n]);
+buildings.push({coords:coords, luas:parseFloat(luas(coords))});
+}
+});
+
+// SORT
+buildings.sort((a,b)=>b.luas-a.luas);
+
+// RENDER
+buildings.forEach((b,i)=>{
+
+let nama = daftarGedung[i] || "Bangunan Kampus";
+
+let poly=L.polygon(b.coords,{
+color:getColor(nama),
+fillColor:getColor(nama),
+fillOpacity:0.6
+}).addTo(map);
+
+poly.on("click", function(){
+document.getElementById("info").innerHTML = `
+<b>${nama}</b><br>
+Luas: ${b.luas} m²
+`;
+});
+
+});
+
+});
+
+</script>
+</body>
+</html>
